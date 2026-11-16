@@ -1,0 +1,45 @@
+name: Build va deploy trang nap
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Cai PlatformIO
+        run: pip install --upgrade platformio
+      - name: Bien dich firmware
+        run: pio run
+      - name: Gom file vao thu muc site
+        run: |
+          mkdir -p site
+          cp index.html site/
+          cp manifest.json site/
+          cp .pio/build/esp32s3/bootloader.bin site/
+          cp .pio/build/esp32s3/partitions.bin site/
+          cp .pio/build/esp32s3/firmware.bin site/
+          cp "$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin" site/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
