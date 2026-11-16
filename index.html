@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PTP REPAIR - Nap firmware</title>
+<style>
+body{background:#0f1115;color:#e8eaf0;font-family:sans-serif;text-align:center;padding:40px}
+h1{color:#e24b4a}
+button{background:#f2a24a;color:#1a1206;border:0;border-radius:10px;padding:14px 24px;font-size:16px;font-weight:700;cursor:pointer}
+</style></head>
+<body>
+<h1>PTP REPAIR</h1>
+<p>Cam board ESP32-S3 vao cong UART roi bam nut:</p>
+<esp-web-install-button manifest="./manifest.json">
+  <button slot="activate">Cam board &amp; Nap firmware</button>
+  <span slot="unsupported">Hay dung Chrome hoac Edge tren may tinh.</span>
+</esp-web-install-button>
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</body></html>
