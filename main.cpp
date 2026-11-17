@@ -126,7 +126,7 @@ void draw(){
   if(page==0)pageHome();else if(page==1)pageDeck();
   else if(page==2)pagePrint();else pageSettings();
 }
-void setup(){ tft.init(); tft.setRotation(3); draw(); }
+void setup(){ tft.init(); tft.setRotation(1); draw(); }
 void loop(){
   uint32_t now=millis();
   if(now-lastSec>=1000){lastSec=now;
