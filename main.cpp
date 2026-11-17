@@ -15,8 +15,11 @@ static const uint16_t BG=C565(11,13,17), CARD=C565(20,24,33), KEYAPP=C565(23,31,
   RED=C565(224,70,70), DARK=C565(26,18,6), BORDER=C565(30,34,43),
   KEYTX=C565(178,186,202);
 
+#define BUZZER 32          // coi bao 3 chan (active buzzer) -> chan tin hieu
 int page=0, hh=21, mm=44, ss=0;
 uint32_t lastSec=0; int curFont=-1;
+
+void beep(int ms=35){ digitalWrite(BUZZER,HIGH); delay(ms); digitalWrite(BUZZER,LOW); }
 bool deckOn[6]={false,false,false,false,false,false};
 bool ntpOn=true, autoDark=false;
 const char* DECK_K[6]={"Bambu","OBS quay","CapCut","Chrome","Thu muc","Chup hinh"};
@@ -38,10 +41,6 @@ void icPrint(int cx,int cy,uint16_t c){ tft.fillRect(cx-4,cy-8,8,4,c);
 void icGear(int cx,int cy,uint16_t c){ tft.fillCircle(cx,cy,7,c);
   for(int a=0;a<360;a+=60){ float r=a*3.14159/180; tft.fillRect(cx+cos(r)*7-1,cy+sin(r)*7-1,3,3,c); }
   tft.fillCircle(cx,cy,3,BG); }
-void icMic(int cx,int cy,uint16_t c){ tft.fillRoundRect(cx-3,cy-8,6,10,3,c);
-  tft.drawFastVLine(cx,cy+2,4,c); tft.drawFastHLine(cx-4,cy+6,9,c);
-  tft.drawFastVLine(cx-5,cy-1,2,c); tft.drawFastVLine(cx+5,cy-1,2,c); }
-
 void tabBar(){
   tft.fillRect(0,195,320,45,BG); tft.drawFastHLine(0,196,320,BORDER);
   const char* L[]={"Trang chu","Deck","May in","Cai dat"};
@@ -66,7 +65,7 @@ void pageHome(){
   tft.fillCircle(13,17,4,GRN);
   txt(0,24,10,"Wi-Fi",MUTED,BG,TL_DATUM);
   txt(0,312,10,"28°C   21:44",MUTED,BG,TR_DATUM);
-  drawLogo(248,24); homeClock();
+  drawLogo(248,38); homeClock();
   txt(0,10,92,"Thu Ba, 17 Thang 11, 2026",DATEC,BG,TL_DATUM);
   const char* d[]={"T2","T3","T4","T5","T6","T7","CN"};
   for(int i=0;i<7;i++){ int x=8+i*43; bool t=(i==1);
@@ -77,7 +76,6 @@ void pageHome(){
   tft.fillRect(10,164,6,8,ORANGE); tft.fillRect(9,163,2,2,ORANGE);
   txt(0,22,160,"Lich: ",MUTED,BG,TL_DATUM);
   txt(0,22+tw(0,"Lich: "),160,"Giao hang khach 15:00",ORANGE,BG,TL_DATUM);
-  tft.fillCircle(292,168,15,BLU); icMic(292,168,WHITE);
   tabBar();
 }
 void key(int x,int y,int w,int h,const char*l,bool on){
@@ -143,16 +141,13 @@ void flashBtn(int x,int y,int w,int h,uint16_t c,const char*l,uint16_t tc){
 }
 
 void handleTouch(int x,int y){
+  beep();                           // keu bip phan hoi moi khi cham
   if(y>=199){                       // tab bar
     for(int i=0;i<4;i++){ int tx0=6+i*78; if(x>=tx0 && x<tx0+74){
       if(page!=i){ page=i; draw(); } return; } }
     return;
   }
-  if(page==0){                      // home: mic button
-    int dx=x-292, dy=y-168; if(dx*dx+dy*dy<=18*18){
-      tft.fillCircle(292,168,15,WHITE); delay(120);
-      tft.fillCircle(292,168,15,BLU); icMic(292,168,WHITE); }
-  } else if(page==1){               // deck: toggle keys
+  if(page==1){                      // deck: toggle keys
     for(int i=0;i<6;i++){ int kx=6+(i%3)*103, ky=54+(i/3)*58;
       if(x>=kx&&x<kx+98&&y>=ky&&y<ky+52){ deckOn[i]=!deckOn[i];
         key(kx,ky,98,52,DECK_K[i],deckOn[i]); return; } }
@@ -185,6 +180,7 @@ void loadCalibration(){
 }
 
 void setup(){
+  pinMode(BUZZER, OUTPUT); digitalWrite(BUZZER, LOW);
   tft.init(); tft.setRotation(3);
   tft.setSwapBytes(true); tft.fillScreen(BG);
   loadCalibration();
