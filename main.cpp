@@ -8,39 +8,30 @@
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(LCD_CS, LCD_DC, LCD_RST);
 
-uint8_t rot = 0;
-uint16_t bg[] = {ILI9341_NAVY, ILI9341_DARKGREEN, ILI9341_MAROON, ILI9341_PURPLE};
-
-void showRot() {
-  tft.setRotation(rot);
+void setup() {
+  tft.begin(10000000);          // SPI cham lai cho breadboard (10MHz)
+  tft.setRotation(0);
   int w = tft.width(), h = tft.height();
-  tft.fillScreen(bg[rot]);
+
+  tft.fillScreen(ILI9341_BLACK);
   tft.drawRect(0, 0, w, h, ILI9341_WHITE);
-  tft.drawRect(1, 1, w - 2, h - 2, ILI9341_WHITE);
-  tft.fillRect(0, 0, 24, 24, ILI9341_RED);      // goc TREN-TRAI = do
-  tft.fillRect(w - 24, 0, 24, 24, ILI9341_GREEN); // goc TREN-PHAI = xanh
+  tft.drawRect(2, 2, w - 4, h - 4, ILI9341_WHITE);
+
+  tft.fillRect(0, 0, 24, 24, ILI9341_RED);        // goc tren-trai
+  tft.fillRect(w - 24, 0, 24, 24, ILI9341_GREEN); // goc tren-phai
+  tft.fillRect(0, h - 24, 24, 24, ILI9341_BLUE);  // goc duoi-trai
+  tft.fillRect(w - 24, h - 24, 24, 24, ILI9341_YELLOW); // goc duoi-phai
+
   tft.setTextColor(ILI9341_WHITE);
   tft.setTextSize(3);
-  tft.setCursor(40, h / 2 - 24);
-  tft.print("ROT ");
-  tft.print(rot);
+  tft.setCursor(30, h / 2 - 30);
+  tft.print("PTP");
   tft.setTextSize(2);
-  tft.setCursor(40, h / 2 + 16);
-  tft.print(w);
-  tft.print("x");
-  tft.print(h);
+  tft.setCursor(30, h / 2 + 6);
+  tft.print("REPAIR");
   tft.setTextSize(1);
-  tft.setCursor(40, h / 2 + 44);
-  tft.print("PTP REPAIR");
+  tft.setCursor(30, h / 2 + 34);
+  tft.print("FULL SCREEN 10MHz");
 }
 
-void setup() {
-  tft.begin();
-  showRot();
-}
-
-void loop() {
-  delay(2500);
-  rot = (rot + 1) % 4;
-  showRot();
-}
+void loop() {}
