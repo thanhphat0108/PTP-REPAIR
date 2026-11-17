@@ -1,10 +1,12 @@
 #include <WiFi.h>
 #include <WiFiManager.h>      // tzapu/WiFiManager
 #include <HTTPClient.h>
-#include <WiFiClientSecure.h>
+#include <PubSubClient.h>
 #include <time.h>
 
-#define CLOUD_TOPIC "ptp-deck-9f3k7q2x8m"   // hop thu rieng tren ntfy.sh (trung voi file PC)
+#define MQTT_HOST   "broker.emqx.io"
+#define MQTT_TOPIC  "ptp/deck/9f3k7q2x8m"      // nut app -> PC
+#define MQTT_PTOPIC "ptp/printer/9f3k7q2x8m"   // may in -> man
 #include <TFT_eSPI.h>
 #include <Preferences.h>
 #include "F_TAB.h"   // Poppins Medium 12px
@@ -17,6 +19,8 @@
 TFT_eSPI tft = TFT_eSPI();
 Preferences prefs;
 WiFiManager wm;
+WiFiClient espClient;
+PubSubClient mqtt(espClient);
 
 #define C565(r,g,b) (uint16_t)((((r)&0xF8)<<8)|(((g)&0xFC)<<3)|((b)>>3))
 static const uint16_t BG=C565(11,13,17), CARD=C565(20,24,33), KEYAPP=C565(23,31,43),
@@ -30,6 +34,8 @@ bool ntpOn=true, wifiOK=false;
 char eventTxt[48]="Chua dat su kien";
 char pcIP[20]="";
 char httpStatus[28]="San sang";
+int pNoz=0,pNozT=0,pBed=0,pBedT=0,pPct=0,pLay=0,pTot=0,pRem=0;
+char pState[16]="--"; bool pOnline=false; uint32_t pLast=0;
 const char* DECK_LBL[6]={"Bambu","Facebook","EZVIZ","Zalo","Chrome","YouTube"};
 const char* APPID[6]  ={"bambu","facebook","ezviz","zalo","chrome","youtube"};
 const char* DOW[7]={"Chu Nhat","Thu Hai","Thu Ba","Thu Tu","Thu Nam","Thu Sau","Thu Bay"};
@@ -132,31 +138,54 @@ void pageDeck(){
   for(int i=0;i<6;i++) keyApp(i);
   tabBar();
 }
+String mqttId(){ return "ptp-esp-" + String((uint32_t)ESP.getEfuseMac(), HEX); }
+void mqttEnsure(){ if(wifiOK && !mqtt.connected()){ if(mqtt.connect(mqttId().c_str())) mqtt.subscribe(MQTT_PTOPIC); } }
 void openApp(const char* id){
   if(!wifiOK){ strcpy(httpStatus,"WiFi chua ket noi"); drawDeckStatus(); return; }
-  WiFiClientSecure cs; cs.setInsecure();
-  HTTPClient http;
-  http.begin(cs, "https://ntfy.sh/" CLOUD_TOPIC);
-  http.setConnectTimeout(6000);
-  http.addHeader("Content-Type","text/plain");
-  int code=http.POST((uint8_t*)id, strlen(id));
-  http.end();
-  if(code==200) strcpy(httpStatus,"Gui OK (cloud)");
-  else snprintf(httpStatus,28,"Loi gui: %d",code);
+  mqttEnsure();
+  if(mqtt.connected() && mqtt.publish(MQTT_TOPIC, id)) strcpy(httpStatus,"Gui OK (cloud)");
+  else strcpy(httpStatus,"Mat ket noi cloud");
   drawDeckStatus();
 }
 
+const char* stateVi(const char*s){
+  if(!strcmp(s,"RUNNING"))return "Dang in";
+  if(!strcmp(s,"PAUSE"))  return "Tam dung";
+  if(!strcmp(s,"FINISH")) return "Hoan thanh";
+  if(!strcmp(s,"IDLE"))   return "San sang";
+  if(!strcmp(s,"PREPARE"))return "Chuan bi";
+  if(!strcmp(s,"SLICING"))return "Dang cat lop";
+  if(!strcmp(s,"FAILED")) return "Loi in";
+  return s;
+}
 void pagePrint(){
   tft.fillRect(0,0,320,196,BG);
-  tft.fillCircle(13,17,4,MUTED);
+  bool on = pOnline && (millis()-pLast < 20000);
+  tft.fillCircle(13,17,4, on?GRN:MUTED);
   txt(1,24,8,"May in 3D",WHITE,BG,TL_DATUM);
-  txt(0,25,34,"Chua ket noi may in",MUTED,BG,TL_DATUM);
   const char* la[]={"Dau phun","Ban nhiet","Lop"};
-  for(int i=0;i<3;i++){ int x=8+i*102; rr(x,54,96,48,CARD,8);
-    txt(0,x+8,60,la[i],MUTED,CARD,TL_DATUM);
-    txt(1,x+8,74,"--",KEYTX,CARD,TL_DATUM); }
-  rr(8,110,304,14,CARD,7);
-  txt(0,8,128,"0%",MUTED,BG,TL_DATUM);
+  char val[16], suf[16];
+  if(!on){
+    txt(0,25,34,"Chua ket noi may in",MUTED,BG,TL_DATUM);
+    for(int i=0;i<3;i++){ int x=8+i*102; rr(x,54,96,48,CARD,8);
+      txt(0,x+8,60,la[i],MUTED,CARD,TL_DATUM);
+      txt(1,x+8,74,"--",KEYTX,CARD,TL_DATUM); }
+    rr(8,110,304,14,CARD,7);
+    txt(0,8,128,"0%",MUTED,BG,TL_DATUM);
+  } else {
+    txt(0,25,34,stateVi(pState),GRN,BG,TL_DATUM);
+    for(int i=0;i<3;i++){ int x=8+i*102; rr(x,54,96,48,CARD,8);
+      txt(0,x+8,60,la[i],MUTED,CARD,TL_DATUM);
+      if(i==0){ sprintf(val,"%d",pNoz); sprintf(suf,"/%dC",pNozT); }
+      else if(i==1){ sprintf(val,"%d",pBed); sprintf(suf,"/%dC",pBedT); }
+      else { sprintf(val,"%d",pLay); sprintf(suf,"/%d",pTot); }
+      txt(1,x+8,74,val,WHITE,CARD,TL_DATUM); int w=tw(1,val);
+      txt(0,x+10+w,80,suf,MUTED,CARD,TL_DATUM); }
+    rr(8,110,304,14,CARD,7);
+    int pw=(int)(304.0*pPct/100.0); if(pw>3) rr(8,110,pw,14,ORANGE,7);
+    sprintf(val,"%d%%",pPct); txt(0,8,128,val,MUTED,BG,TL_DATUM);
+    sprintf(val,"con %d phut",pRem); txt(0,312,128,val,MUTED,BG,TR_DATUM);
+  }
   rr(8,150,150,44,CARD,10); txt(0,83,172,"Tam dung",KEYTX,CARD,TC_DATUM);
   rr(164,150,148,44,CARD,10); txt(0,238,172,"Dung",KEYTX,CARD,TC_DATUM);
   tabBar();
@@ -184,6 +213,17 @@ void pageSettings(){
 }
 void draw(){ if(page==0)pageHome(); else if(page==1)pageDeck();
   else if(page==2)pagePrint(); else pageSettings(); }
+
+void onMqtt(char* topic, byte* payload, unsigned int len){
+  char buf[160]; unsigned int n = len<159?len:159; memcpy(buf,payload,n); buf[n]=0;
+  if(strcmp(topic,MQTT_PTOPIC)==0){
+    char st[16]="--"; int a[8]={0,0,0,0,0,0,0,0};
+    int got=sscanf(buf,"%d|%d|%d|%d|%d|%d|%d|%d|%15s",&a[0],&a[1],&a[2],&a[3],&a[4],&a[5],&a[6],&a[7],st);
+    if(got>=8){ pNoz=a[0];pNozT=a[1];pBed=a[2];pBedT=a[3];pPct=a[4];pLay=a[5];pTot=a[6];pRem=a[7];
+      strncpy(pState,st,15);pState[15]=0; pOnline=true; pLast=millis();
+      if(page==2) pagePrint(); }
+  }
+}
 
 void saveCfg(){ prefs.begin("ptp",false); prefs.putString("event",eventTxt); prefs.putString("pcip",pcIP); prefs.end(); }
 
@@ -256,11 +296,18 @@ void setup(){
   if(wifiOK){ pullParams();
     configTime(7*3600,0,"pool.ntp.org","time.google.com");
     uint32_t t0=millis(); while(!timeSynced() && millis()-t0<6000) delay(150); }
+  mqtt.setServer(MQTT_HOST, 1883);
+  mqtt.setCallback(onMqtt);
+  mqttEnsure();
   draw();
 }
 void loop(){
   uint32_t now=millis();
   if(now-lastSec>=1000){ lastSec=now; if(page==0) homeClock(); }
+  if(wifiOK){
+    if(!mqtt.connected()){ static uint32_t lr=0; if(now-lr>3000){ lr=now; mqttEnsure(); } }
+    mqtt.loop();
+  }
   uint16_t tx,ty;
   if(tft.getTouch(&tx,&ty)){ handleTouch(tx,ty);
     while(tft.getTouch(&tx,&ty)) delay(10); delay(60); }
