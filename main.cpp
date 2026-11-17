@@ -1,19 +1,25 @@
 #include <TFT_eSPI.h>
+#include <Preferences.h>
 #include "F_SML.h"   // Poppins Medium 15px
-#include "F_MED.h"   // Poppins Bold 18px
-#include "F_BIG.h"   // Poppins Bold 46px (clock)
+#include "F_MED.h"   // Poppins Medium 18px
+#include "F_BIG.h"   // Poppins Medium 46px (clock)
 #include "LOGO.h"    // PTP REPAIR 64x64 RGB565
 
 TFT_eSPI tft = TFT_eSPI();
+Preferences prefs;
 
 #define C565(r,g,b) (uint16_t)((((r)&0xF8)<<8)|(((g)&0xFC)<<3)|((b)>>3))
 static const uint16_t BG=C565(11,13,17), CARD=C565(20,24,33), KEYAPP=C565(23,31,43),
   ORANGE=C565(242,162,74), MUTED=C565(139,147,166), DATEC=C565(195,201,214),
   GRN=C565(61,214,140), BLU=C565(74,168,255), WHITE=C565(232,234,240),
-  RED=C565(224,70,70), DARK=C565(26,18,6), BORDER=C565(30,34,43);
+  RED=C565(224,70,70), DARK=C565(26,18,6), BORDER=C565(30,34,43),
+  KEYTX=C565(178,186,202);
 
 int page=0, hh=21, mm=44, ss=0;
-uint32_t lastSec=0, lastPage=0; int curFont=-1;
+uint32_t lastSec=0; int curFont=-1;
+bool deckOn[6]={false,false,false,false,false,false};
+bool ntpOn=true, autoDark=false;
+const char* DECK_K[6]={"Bambu","OBS quay","CapCut","Chrome","Thu muc","Chup hinh"};
 
 void useFont(int id){ if(id==curFont)return; curFont=id;
   if(id==0)tft.loadFont(F_SML); else if(id==1)tft.loadFont(F_MED); else tft.loadFont(F_BIG); }
@@ -74,16 +80,16 @@ void pageHome(){
   tft.fillCircle(292,168,15,BLU); icMic(292,168,WHITE);
   tabBar();
 }
-void key(int x,int y,int w,int h,const char*l){
-  rr(x,y,w,h,KEYAPP,9); txt(0,x+w/2,y+h/2,l,C565(178,186,202),KEYAPP,MC_DATUM); }
+void key(int x,int y,int w,int h,const char*l,bool on){
+  rr(x,y,w,h,on?ORANGE:KEYAPP,9);
+  txt(0,x+w/2,y+h/2,l, on?DARK:KEYTX, on?ORANGE:KEYAPP, MC_DATUM); }
 void pageDeck(){
   tft.fillRect(0,0,320,196,BG);
   tft.fillCircle(13,17,4,GRN);
   txt(1,24,8,"Stream Deck",WHITE,BG,TL_DATUM);
   txt(0,312,10,"21:44",MUTED,BG,TR_DATUM);
   txt(0,10,38,"MAY TINH",MUTED,BG,TL_DATUM);
-  const char* k[]={"Bambu","OBS quay","CapCut","Chrome","Thu muc","Chup hinh"};
-  for(int i=0;i<6;i++){ int x=6+(i%3)*103; int y=54+(i/3)*58; key(x,y,98,52,k[i]); }
+  for(int i=0;i<6;i++){ int x=6+(i%3)*103; int y=54+(i/3)*58; key(x,y,98,52,DECK_K[i],deckOn[i]); }
   tabBar();
 }
 void pagePrint(){
@@ -120,22 +126,79 @@ void pageSettings(){
   txt(1,24,8,"Cai dat",WHITE,BG,TL_DATUM);
   txt(0,312,10,"21:44",MUTED,BG,TR_DATUM);
   srow(46,"Wi-Fi: Xuong_Sua","-52 dBm",false,false,MUTED);
-  srow(76,"Dong bo gio (NTP)","",true,true,MUTED);
+  srow(76,"Dong bo gio (NTP)","",true,ntpOn,MUTED);
   srow(106,"Do sang man hinh","80%",false,false,MUTED);
   srow(136,"Lien ket may in Bambu","Da noi",false,false,GRN);
-  srow(166,"Cap nhat OTA","v1.0",false,false,MUTED);
+  srow(166,"Che do toi tu dong","",true,autoDark,MUTED);
   tabBar();
 }
 void draw(){ if(page==0)pageHome(); else if(page==1)pageDeck();
   else if(page==2)pagePrint(); else pageSettings(); }
+
+// ---- flash feedback for a momentary button ----
+void flashBtn(int x,int y,int w,int h,uint16_t c,const char*l,uint16_t tc){
+  rr(x,y,w,h,WHITE,10); txt(0,x+w/2,y+h/2,l,DARK,WHITE,MC_DATUM);
+  delay(120);
+  rr(x,y,w,h,c,10); txt(0,x+w/2,y+h/2,l,tc,c,MC_DATUM);
+}
+
+void handleTouch(int x,int y){
+  if(y>=199){                       // tab bar
+    for(int i=0;i<4;i++){ int tx0=6+i*78; if(x>=tx0 && x<tx0+74){
+      if(page!=i){ page=i; draw(); } return; } }
+    return;
+  }
+  if(page==0){                      // home: mic button
+    int dx=x-292, dy=y-168; if(dx*dx+dy*dy<=18*18){
+      tft.fillCircle(292,168,15,WHITE); delay(120);
+      tft.fillCircle(292,168,15,BLU); icMic(292,168,WHITE); }
+  } else if(page==1){               // deck: toggle keys
+    for(int i=0;i<6;i++){ int kx=6+(i%3)*103, ky=54+(i/3)*58;
+      if(x>=kx&&x<kx+98&&y>=ky&&y<ky+52){ deckOn[i]=!deckOn[i];
+        key(kx,ky,98,52,DECK_K[i],deckOn[i]); return; } }
+  } else if(page==2){               // printer: momentary buttons
+    if(x>=8&&x<104&&y>=150&&y<194) flashBtn(8,150,96,44,ORANGE,"Tam dung",DARK);
+    else if(x>=112&&x<208&&y>=150&&y<194) flashBtn(112,150,96,44,CARD,"Chinh",WHITE);
+    else if(x>=216&&x<312&&y>=150&&y<194) flashBtn(216,150,96,44,CARD,"Dung",RED);
+  } else {                          // settings: toggles
+    if(y>=66&&y<=98){ ntpOn=!ntpOn; srow(76,"Dong bo gio (NTP)","",true,ntpOn,MUTED); }
+    else if(y>=156&&y<=188){ autoDark=!autoDark; srow(166,"Che do toi tu dong","",true,autoDark,MUTED); }
+  }
+}
+
+void doCalibrate(uint16_t*cal){
+  tft.fillScreen(BG);
+  txt(1,160,96,"Cham lan luot 4 goc",ORANGE,BG,MC_DATUM);
+  txt(0,160,122,"theo mui ten",MUTED,BG,MC_DATUM);
+  tft.calibrateTouch(cal, ORANGE, BG, 16);
+}
+void loadCalibration(){
+  // hieu chinh mac dinh cho man 2.8" ngang -> nap vao cham duoc ngay
+  uint16_t cal[5] = { 360, 3500, 340, 3600, 7 };
+  prefs.begin("ptp", false);
+  bool have = (prefs.getBytesLength("cal")==10);
+  if(have) prefs.getBytes("cal", cal, 10);
+  bool held = (tft.getTouchRawZ() > 600);   // giu tay luc bat nguon -> hieu chinh lai
+  if(held){ doCalibrate(cal); prefs.putBytes("cal", cal, 10); }
+  tft.setTouch(cal);
+  prefs.end();
+}
+
 void setup(){
   tft.init(); tft.setRotation(3);
-  tft.setSwapBytes(true); tft.fillScreen(BG); draw();
+  tft.setSwapBytes(true); tft.fillScreen(BG);
+  loadCalibration();
+  draw();
 }
 void loop(){
   uint32_t now=millis();
   if(now-lastSec>=1000){ lastSec=now;
     if(++ss>=60){ ss=0; if(++mm>=60){ mm=0; hh=(hh+1)%24; } }
     if(page==0)homeClock(); }
-  if(now-lastPage>=6000){ lastPage=now; page=(page+1)%4; draw(); }
+  uint16_t tx,ty;
+  if(tft.getTouch(&tx,&ty)){
+    handleTouch(tx,ty);
+    while(tft.getTouch(&tx,&ty)) delay(10);   // cho nha tay
+    delay(60);
+  }
 }
