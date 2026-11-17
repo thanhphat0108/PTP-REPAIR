@@ -3,6 +3,7 @@
 #include <time.h>
 #include <TFT_eSPI.h>
 #include <Preferences.h>
+#include "F_TAB.h"   // Poppins Medium 12px (nhan tab)
 #include "F_SML.h"   // Poppins Medium 15px
 #include "F_MED.h"   // Poppins Medium 18px
 #include "F_BIG.h"   // Poppins Medium 46px (clock)
@@ -31,7 +32,8 @@ const char* DOWS[7]={"T2","T3","T4","T5","T6","T7","CN"};
 void beep(int ms=35){ digitalWrite(BUZZER,LOW); delay(ms); digitalWrite(BUZZER,HIGH); }
 
 void useFont(int id){ if(id==curFont)return; curFont=id;
-  if(id==0)tft.loadFont(F_SML); else if(id==1)tft.loadFont(F_MED); else tft.loadFont(F_BIG); }
+  if(id==0)tft.loadFont(F_SML); else if(id==1)tft.loadFont(F_MED);
+  else if(id==2)tft.loadFont(F_BIG); else tft.loadFont(F_TAB); }
 int tw(int id,const char*s){ useFont(id); return tft.textWidth(s); }
 void txt(int id,int x,int y,const char*s,uint16_t fg,uint16_t bg,uint8_t dat){
   useFont(id); tft.setTextDatum(dat); tft.setTextColor(fg,bg); tft.drawString(s,x,y); }
@@ -56,9 +58,9 @@ void tabBar(){
   for(int i=0;i<4;i++){ int x=6+i*78; bool a=(i==page);
     rr(x,199,74,38,a?ORANGE:CARD,9);
     uint16_t ic=a?DARK:MUTED, bg=a?ORANGE:CARD; int cx=x+37;
-    if(i==0)icHome(cx,210,ic); else if(i==1)icGrid(cx,210,ic);
-    else if(i==2)icPrint(cx,210,ic); else icGear(cx,210,ic);
-    txt(0,cx,222,L[i],a?DARK:MUTED,bg,TC_DATUM); }
+    if(i==0)icHome(cx,209,ic); else if(i==1)icGrid(cx,209,ic);
+    else if(i==2)icPrint(cx,209,ic); else icGear(cx,209,ic);
+    txt(3,cx,227,L[i],a?DARK:MUTED,bg,MC_DATUM); }
 }
 void drawLogo(int x,int y){ tft.pushImage(x,y,LOGO_W,LOGO_H,LOGO); }
 
