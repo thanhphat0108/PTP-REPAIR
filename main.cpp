@@ -2,21 +2,13 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
 
-#define LCD_SCLK 19
-#define LCD_MOSI 20
-#define LCD_MISO -1
-#define LCD_CS   10
-#define LCD_DC   47
-#define LCD_RST  21
-#define LCD_BL   38
+#define LCD_CS   5
+#define LCD_DC   27
+#define LCD_RST  17
 
-SPIClass lcdSPI(HSPI);
-Adafruit_ILI9341 tft = Adafruit_ILI9341(&lcdSPI, LCD_DC, LCD_CS, LCD_RST);
+Adafruit_ILI9341 tft = Adafruit_ILI9341(LCD_CS, LCD_DC, LCD_RST);
 
 void setup() {
-  pinMode(LCD_BL, OUTPUT);
-  digitalWrite(LCD_BL, HIGH);
-  lcdSPI.begin(LCD_SCLK, LCD_MISO, LCD_MOSI, LCD_CS);
   tft.begin();
   tft.setRotation(1);
   tft.fillScreen(ILI9341_BLACK);
