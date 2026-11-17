@@ -1,15 +1,19 @@
 #include <TFT_eSPI.h>
 TFT_eSPI tft = TFT_eSPI();
 
-void button(int x, int y, int w, int h, uint16_t col,
+void bg() {
+  for (int y = 0; y < 320; y += 20) tft.fillRect(0, y, 240, 20, TFT_BLACK);
+}
+
+void button(int x, int y, int w, int h, uint16_t col, int ts,
             const char* l1, const char* l2) {
   tft.fillRoundRect(x, y, w, h, 8, col);
   tft.setTextColor(TFT_WHITE);
   tft.setTextDatum(MC_DATUM);
-  tft.setTextSize(2);
+  tft.setTextSize(ts);
   if (l2[0]) {
-    tft.drawString(l1, x + w / 2, y + h / 2 - 11);
-    tft.drawString(l2, x + w / 2, y + h / 2 + 11);
+    tft.drawString(l1, x + w / 2, y + h / 2 - 5 * ts);
+    tft.drawString(l2, x + w / 2, y + h / 2 + 5 * ts);
   } else {
     tft.drawString(l1, x + w / 2, y + h / 2);
   }
@@ -17,48 +21,43 @@ void button(int x, int y, int w, int h, uint16_t col,
 
 void setup() {
   tft.init();
-  tft.setRotation(1);
-  int W = tft.width(), H = tft.height();
-  tft.fillScreen(TFT_BLACK);
+  tft.setRotation(0);          // DOC 240x320
+  bg();
+  int W = 240;
 
-  // thanh tren
   tft.setTextColor(TFT_WHITE);
   tft.setTextDatum(TL_DATUM);
   tft.setTextSize(2);
-  tft.drawString("14:35", 6, 6);
+  tft.drawString("14:35", 6, 4);
+  for (int i = 0; i < 3; i++) tft.drawCircle(218, 14, 3 + i * 4, TFT_GREEN);
+  tft.fillCircle(218, 14, 2, TFT_GREEN);
   tft.setTextSize(1);
-  tft.drawString("Thu 5, 18/09/2026", 120, 12);
-  for (int i = 0; i < 3; i++) tft.drawCircle(302, 22, 4 + i * 5, TFT_GREEN);
-  tft.fillCircle(302, 22, 2, TFT_GREEN);
+  tft.drawString("Thu 5, 18/09/2026", 6, 28);
 
-  // tieu de
   tft.setTextDatum(MC_DATUM);
   tft.setTextColor(TFT_CYAN);
-  tft.setTextSize(4);
-  tft.drawString("PTP Repair", W / 2, 46);
+  tft.setTextSize(3);
+  tft.drawString("PTP Repair", W / 2, 54);
 
-  // so dien thoai
   tft.setTextColor(TFT_WHITE);
   tft.setTextSize(1);
-  tft.drawString("0977885774 - 0339287797", W / 2, 74);
+  tft.drawString("0977885774-0339287797", W / 2, 76);
 
-  // READY
-  tft.drawRoundRect(W / 2 - 70, 84, 140, 22, 11, TFT_GREEN);
-  tft.fillCircle(W / 2 - 52, 95, 5, TFT_GREEN);
+  tft.drawRoundRect(W / 2 - 72, 86, 144, 22, 11, TFT_GREEN);
+  tft.fillCircle(W / 2 - 56, 97, 5, TFT_GREEN);
   tft.setTextColor(TFT_GREEN);
   tft.setTextSize(2);
-  tft.drawString("READY", W / 2 + 8, 95);
+  tft.drawString("READY", W / 2 + 8, 97);
 
-  // hang nut 1
-  button(4,   116, 100, 52, TFT_GREEN, "START", "AUTO");
-  button(110, 116, 100, 52, TFT_BLUE,  "CHI HUT", "C.KHONG");
-  button(216, 116, 100, 52, TFT_RED,   "STOP", "");
+  uint16_t dk = tft.color565(30, 42, 58);
 
-  // hang nut 2
-  uint16_t dk = tft.color565(28, 40, 56);
-  button(4,   174, 100, 52, dk, "CAI DAT", "");
-  button(110, 174, 100, 52, dk, "THU CONG", "");
-  button(216, 174, 100, 52, dk, "TRANG", "THAI");
+  button(8,   118, 110, 58, TFT_GREEN, 2, "START", "AUTO");
+  button(122, 118, 110, 58, TFT_RED,   2, "STOP", "");
+  button(8,   182, 224, 46, TFT_BLUE,  2, "CHI HUT C.KHONG", "");
+  button(8,   234, 72,  58, dk, 1, "CAI", "DAT");
+  button(84,  234, 72,  58, dk, 1, "THU", "CONG");
+  button(160, 234, 72,  58, dk, 1, "TRANG", "THAI");
 }
 
+void loop() {}
 void loop() {}
