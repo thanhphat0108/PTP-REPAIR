@@ -26,9 +26,9 @@ jobs:
           mkdir -p site
           cp index.html site/
           cp manifest.json site/
-          cp .pio/build/esp32s3/bootloader.bin site/
-          cp .pio/build/esp32s3/partitions.bin site/
-          cp .pio/build/esp32s3/firmware.bin site/
+          cp .pio/build/esp32dev/bootloader.bin site/
+          cp .pio/build/esp32dev/partitions.bin site/
+          cp .pio/build/esp32dev/firmware.bin site/
           cp "$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin" site/
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -40,6 +40,3 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
