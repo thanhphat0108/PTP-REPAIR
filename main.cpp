@@ -1,7 +1,10 @@
 #include <WiFi.h>
 #include <WiFiManager.h>      // tzapu/WiFiManager
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <time.h>
+
+#define CLOUD_TOPIC "ptp-deck-9f3k7q2x8m"   // hop thu rieng tren ntfy.sh (trung voi file PC)
 #include <TFT_eSPI.h>
 #include <Preferences.h>
 #include "F_TAB.h"   // Poppins Medium 12px
@@ -124,21 +127,22 @@ void pageDeck(){
   txt(1,24,8,"Stream Deck",WHITE,BG,TL_DATUM);
   char mip[26]; snprintf(mip,26,"Man: %s", wifiOK?WiFi.localIP().toString().c_str():"--");
   txt(0,312,12,mip,MUTED,BG,TR_DATUM);
-  char pl[26]; snprintf(pl,26,"PC: %s", strlen(pcIP)?pcIP:"chua nhap IP");
-  txt(0,10,32,pl, strlen(pcIP)?GRN:ORANGE, BG, TL_DATUM);
+  txt(0,10,32,"Che do: Cloud (Internet)", GRN, BG, TL_DATUM);
   txt(0,312,32,httpStatus,MUTED,BG,TR_DATUM);
   for(int i=0;i<6;i++) keyApp(i);
   tabBar();
 }
 void openApp(const char* id){
   if(!wifiOK){ strcpy(httpStatus,"WiFi chua ket noi"); drawDeckStatus(); return; }
-  if(strlen(pcIP)<7){ strcpy(httpStatus,"Chua nhap IP PC"); drawDeckStatus(); return; }
-  HTTPClient http; char url[90];
-  snprintf(url,sizeof(url),"http://%s:8080/open?app=%s",pcIP,id);
-  http.begin(url); http.setConnectTimeout(1500);
-  int code=http.GET(); http.end();
-  if(code==200) strcpy(httpStatus,"Gui OK (200)");
-  else snprintf(httpStatus,28,"Loi ket noi: %d",code);
+  WiFiClientSecure cs; cs.setInsecure();
+  HTTPClient http;
+  http.begin(cs, "https://ntfy.sh/" CLOUD_TOPIC);
+  http.setConnectTimeout(6000);
+  http.addHeader("Content-Type","text/plain");
+  int code=http.POST((uint8_t*)id, strlen(id));
+  http.end();
+  if(code==200) strcpy(httpStatus,"Gui OK (cloud)");
+  else snprintf(httpStatus,28,"Loi gui: %d",code);
   drawDeckStatus();
 }
 
