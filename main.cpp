@@ -26,6 +26,7 @@ int page=0, curFont=-1; uint32_t lastSec=0;
 bool ntpOn=true, wifiOK=false;
 char eventTxt[48]="Chua dat su kien";
 char pcIP[20]="";
+char httpStatus[28]="San sang";
 const char* DECK_LBL[6]={"Bambu","Facebook","EZVIZ","Zalo","Chrome","YouTube"};
 const char* APPID[6]  ={"bambu","facebook","ezviz","zalo","chrome","youtube"};
 const char* DOW[7]={"Chu Nhat","Thu Hai","Thu Ba","Thu Tu","Thu Nam","Thu Sau","Thu Bay"};
@@ -113,19 +114,32 @@ void keyFlash(int i){
   delay(130);
   tft.drawRoundRect(x,y,w,h,9,KEYAPP); tft.drawRoundRect(x+1,y+1,w-2,h-2,8,KEYAPP);
 }
+void drawDeckStatus(){
+  tft.fillRect(150,30,166,18,BG);
+  txt(0,312,32,httpStatus,MUTED,BG,TR_DATUM);
+}
 void pageDeck(){
   tft.fillRect(0,0,320,196,BG);
   tft.fillCircle(13,17,4, wifiOK?GRN:RED);
   txt(1,24,8,"Stream Deck",WHITE,BG,TL_DATUM);
-  txt(0,312,12,"Bam de mo",MUTED,BG,TR_DATUM);
+  char mip[26]; snprintf(mip,26,"Man: %s", wifiOK?WiFi.localIP().toString().c_str():"--");
+  txt(0,312,12,mip,MUTED,BG,TR_DATUM);
+  char pl[26]; snprintf(pl,26,"PC: %s", strlen(pcIP)?pcIP:"chua nhap IP");
+  txt(0,10,32,pl, strlen(pcIP)?GRN:ORANGE, BG, TL_DATUM);
+  txt(0,312,32,httpStatus,MUTED,BG,TR_DATUM);
   for(int i=0;i<6;i++) keyApp(i);
   tabBar();
 }
 void openApp(const char* id){
-  if(!wifiOK || strlen(pcIP)<7) return;
+  if(!wifiOK){ strcpy(httpStatus,"WiFi chua ket noi"); drawDeckStatus(); return; }
+  if(strlen(pcIP)<7){ strcpy(httpStatus,"Chua nhap IP PC"); drawDeckStatus(); return; }
   HTTPClient http; char url[90];
   snprintf(url,sizeof(url),"http://%s:8080/open?app=%s",pcIP,id);
-  http.begin(url); http.setConnectTimeout(900); http.GET(); http.end();
+  http.begin(url); http.setConnectTimeout(1500);
+  int code=http.GET(); http.end();
+  if(code==200) strcpy(httpStatus,"Gui OK (200)");
+  else snprintf(httpStatus,28,"Loi ket noi: %d",code);
+  drawDeckStatus();
 }
 
 void pagePrint(){
