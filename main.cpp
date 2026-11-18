@@ -4,9 +4,8 @@
 #include <WiFiClientSecure.h>
 #include <time.h>
 
-// Cloud qua ntfy.sh (HTTPS cong 443 - Viettel KHONG chan nhu MQTT 1883)
-#define DECK_URL "https://ntfy.sh/ptp-deck-9f3k7q2x8m"             // nut app -> PC
-#define PR_URL   "https://ntfy.sh/ptp-printer-9f3k7q2x8m/raw?poll=1&since=180s" // may in -> man
+// Cloud qua Firebase Realtime Database (HTTPS 443, khong gioi han nhu ntfy)
+#define FB_BASE "https://ptp-deck-default-rtdb.asia-southeast1.firebasedatabase.app"
 #include <TFT_eSPI.h>
 #include <Preferences.h>
 #include "F_TAB.h"   // Poppins Medium 12px
@@ -124,8 +123,8 @@ void keyFlash(int i){
   tft.drawRoundRect(x,y,w,h,9,KEYAPP); tft.drawRoundRect(x+1,y+1,w-2,h-2,8,KEYAPP);
 }
 void drawDeckStatus(){
-  tft.fillRect(150,30,166,18,BG);
-  txt(0,312,32,httpStatus,MUTED,BG,TR_DATUM);
+  tft.fillRect(10,30,300,18,BG);
+  txt(0,10,32,httpStatus,MUTED,BG,TL_DATUM);
 }
 void pageDeck(){
   tft.fillRect(0,0,320,196,BG);
@@ -133,8 +132,7 @@ void pageDeck(){
   txt(1,24,8,"Stream Deck",WHITE,BG,TL_DATUM);
   char mip[26]; snprintf(mip,26,"Man: %s", wifiOK?WiFi.localIP().toString().c_str():"--");
   txt(0,312,12,mip,MUTED,BG,TR_DATUM);
-  txt(0,10,32,"Che do: Cloud (Internet)", GRN, BG, TL_DATUM);
-  txt(0,312,32,httpStatus,MUTED,BG,TR_DATUM);
+  txt(0,10,32,httpStatus,MUTED,BG,TL_DATUM);   // trang thai canh trai, khong con chong chu
   for(int i=0;i<6;i++) keyApp(i);
   tabBar();
 }
@@ -145,9 +143,11 @@ void openApp(const char* id){
   WiFiClientSecure cs; cs.setInsecure(); cs.setHandshakeTimeout(6);
   HTTPClient h; h.setConnectTimeout(6000); h.setTimeout(7000);
   bool ok=false;
-  if(h.begin(cs, DECK_URL)){
-    h.addHeader("Content-Type","text/plain");
-    int code=h.POST(String(id));
+  String url=String(FB_BASE)+"/deck.json";
+  if(h.begin(cs, url)){
+    h.addHeader("Content-Type","application/json");
+    String body=String("{\"cmd\":\"")+id+"\",\"n\":"+String(millis())+"}";
+    int code=h.sendRequest("PUT",(uint8_t*)body.c_str(),body.length());
     ok=(code>0 && code<400);
     h.end();
   }
@@ -157,8 +157,9 @@ void openApp(const char* id){
 
 // Nhan trang thai may in tu ntfy (HTTPS GET, poll khi dang o trang May in)
 void applyStatus(const char* buf){
+  if(strncmp(buf,"OFF",3)==0){ pOnline=false; pDirty=true; return; }  // may in tat/mat ket noi
   char st[16]="--"; int a[8]={0,0,0,0,0,0,0,0};
-  int got=sscanf(buf,"%d|%d|%d|%d|%d|%d|%d|%d|%15s",&a[0],&a[1],&a[2],&a[3],&a[4],&a[5],&a[6],&a[7],st);
+  int got=sscanf(buf,"%d|%d|%d|%d|%d|%d|%d|%d|%15[^|\"]",&a[0],&a[1],&a[2],&a[3],&a[4],&a[5],&a[6],&a[7],st);
   if(got>=8){ pNoz=a[0];pNozT=a[1];pBed=a[2];pBedT=a[3];pPct=a[4];pLay=a[5];pTot=a[6];pRem=a[7];
     strncpy(pState,st,15);pState[15]=0; pOnline=true; pLast=millis(); pDirty=true; }
 }
@@ -167,14 +168,16 @@ void pollPrinter(){
   printerTried=true;
   WiFiClientSecure cs; cs.setInsecure(); cs.setHandshakeTimeout(5);
   HTTPClient h; h.setConnectTimeout(5000); h.setTimeout(6000);
-  if(h.begin(cs, PR_URL)){
+  String url=String(FB_BASE)+"/printer.json";
+  if(h.begin(cs, url)){
     int code=h.GET();
     if(code==200){
       String body=h.getString(); body.trim();
-      if(body.length()>3){
-        int nl=body.lastIndexOf('\n');
-        String line=(nl>=0)?body.substring(nl+1):body; line.trim();
-        if(line.length()>3) applyStatus(line.c_str());
+      // Firebase tra chuoi JSON co dau ngoac kep: "25|220|..."
+      if(body.length()>2 && body!="null"){
+        if(body[0]=='\"') body=body.substring(1);
+        if(body.endsWith("\"")) body=body.substring(0,body.length()-1);
+        applyStatus(body.c_str());
       }
     }
     h.end();
@@ -364,7 +367,7 @@ void loop(){
   if(now-lwc>=2000){ lwc=now; bool c=(WiFi.status()==WL_CONNECTED);
     if(c!=wifiOK){ wifiOK=c; if(c){ saveWifi(); configTime(7*3600,0,"pool.ntp.org","time.google.com"); } draw(); } }
   // Chi doc may in khi dang xem trang May in -> cac trang khac muot 100%
-  if(wifiOK && page==2 && now-lastPoll>=15000){ lastPoll=now; pollPrinter(); }
+  if(wifiOK && page==2 && now-lastPoll>=10000){ lastPoll=now; pollPrinter(); }
   if(page==2 && pDirty && now-lastPrintDraw>=800){ lastPrintDraw=now; pDirty=false; pagePrint(); }
   uint16_t tx,ty;
   if(tft.getTouch(&tx,&ty)){ handleTouch(tx,ty);
