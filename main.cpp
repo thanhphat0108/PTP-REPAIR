@@ -257,6 +257,31 @@ void splash(const char*l1,const char*l2,const char*l3){
 }
 void apCb(WiFiManager* w){ splash("Mo WiFi tren dien thoai:","PTP-REPAIR-Setup","chon mang + nhap IP may tinh"); }
 
+// ---- Ket noi WiFi NHANH: nho kenh + BSSID router lan truoc ----
+void saveWifi(){
+  prefs.begin("ptp",false);
+  prefs.putString("wss",WiFi.SSID()); prefs.putString("wpw",WiFi.psk());
+  prefs.putUChar("wch",WiFi.channel());
+  uint8_t* b=WiFi.BSSID(); if(b) prefs.putBytes("wbssid",b,6);
+  prefs.end();
+}
+void wifiDots(int n){ char b[5]=""; int k=n%4; for(int i=0;i<k;i++) b[i]='.';
+  tft.fillRect(130,158,60,16,BG); txt(0,160,158,b,ORANGE,BG,TC_DATUM); }
+bool waitConn(uint32_t ms){ uint32_t t0=millis(); int c=0;
+  while(WiFi.status()!=WL_CONNECTED && millis()-t0<ms){ wifiDots(++c); delay(130); }
+  return WiFi.status()==WL_CONNECTED; }
+bool fastConnect(){
+  prefs.begin("ptp",true);
+  String ss=prefs.getString("wss",""), pw=prefs.getString("wpw","");
+  uint8_t ch=prefs.getUChar("wch",0), bssid[6]; bool haveB=(prefs.getBytesLength("wbssid")==6);
+  if(haveB) prefs.getBytes("wbssid",bssid,6);
+  prefs.end();
+  if(ss.length()==0) return false;
+  WiFi.mode(WIFI_STA); WiFi.setSleep(false); WiFi.persistent(true);
+  if(haveB && ch>0){ WiFi.begin(ss.c_str(),pw.c_str(),ch,bssid); if(waitConn(6000)) return true; WiFi.disconnect(); delay(50); }
+  WiFi.begin(ss.c_str(),pw.c_str()); return waitConn(9000);
+}
+
 WiFiManagerParameter pEvent("event","Su kien (Lich)","",47);
 WiFiManagerParameter pPC("pcip","IP may tinh (vd 192.168.1.10)","",19);
 
@@ -270,7 +295,7 @@ void reconfigWifi(){
   wm.setConfigPortalTimeout(180);
   if(wm.startConfigPortal("PTP-REPAIR-Setup")){ wifiOK=true; pullParams(); }
   else wifiOK=(WiFi.status()==WL_CONNECTED);
-  if(wifiOK) configTime(7*3600,0,"pool.ntp.org","time.google.com");
+  if(wifiOK){ saveWifi(); configTime(7*3600,0,"pool.ntp.org","time.google.com"); }
   draw();
 }
 
@@ -310,16 +335,21 @@ void setup(){
   if(ev.length()>0){ strncpy(eventTxt,ev.c_str(),47); eventTxt[47]=0; }
   if(ip.length()>0){ strncpy(pcIP,ip.c_str(),19); pcIP[19]=0; }
 
-  splash("Dang ket noi WiFi...","","Lan dau: mo 'PTP-REPAIR-Setup'");
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);                 // WiFi nhanh, it tre
-  wm.addParameter(&pEvent); wm.addParameter(&pPC);
-  wm.setAPCallback(apCb);
-  wm.setConfigPortalTimeout(180);
-  wm.setConnectTimeout(12);             // khong cho qua lau khi vao WiFi
-  wm.setWiFiAutoReconnect(true);
-  wifiOK = wm.autoConnect("PTP-REPAIR-Setup");
-  if(wifiOK){ pullParams();
+  splash("Dang ket noi WiFi...","","");
+  // Thu ket noi nhanh bang WiFi da luu (nho kenh + router)
+  wifiOK = fastConnect();
+  if(!wifiOK){
+    // Chua co WiFi hoac doi router -> mo portal cai dat
+    WiFi.mode(WIFI_STA); WiFi.setSleep(false);
+    wm.addParameter(&pEvent); wm.addParameter(&pPC);
+    wm.setAPCallback(apCb);
+    wm.setConfigPortalTimeout(180);
+    wm.setConnectTimeout(12);
+    wm.setWiFiAutoReconnect(true);
+    wifiOK = wm.autoConnect("PTP-REPAIR-Setup");
+    if(wifiOK) pullParams();
+  }
+  if(wifiOK){ saveWifi();
     configTime(7*3600,0,"pool.ntp.org","time.google.com"); } // dong bo gio chay nen, KHONG chan khoi dong
   draw();
 }
