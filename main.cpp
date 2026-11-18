@@ -6,7 +6,7 @@
 
 // Cloud qua ntfy.sh (HTTPS cong 443 - Viettel KHONG chan nhu MQTT 1883)
 #define DECK_URL "https://ntfy.sh/ptp-deck-9f3k7q2x8m"             // nut app -> PC
-#define PR_URL   "https://ntfy.sh/ptp-printer-9f3k7q2x8m/raw?poll=1&since=25s" // may in -> man
+#define PR_URL   "https://ntfy.sh/ptp-printer-9f3k7q2x8m/raw?poll=1&since=180s" // may in -> man
 #include <TFT_eSPI.h>
 #include <Preferences.h>
 #include "F_TAB.h"   // Poppins Medium 12px
@@ -193,7 +193,7 @@ const char* stateVi(const char*s){
 }
 void pagePrint(){
   tft.fillRect(0,0,320,196,BG);
-  bool on = pOnline && (millis()-pLast < 35000);
+  bool on = pOnline && (millis()-pLast < 60000);
   tft.fillCircle(13,17,4, on?GRN:MUTED);
   txt(1,24,8,"May in 3D",WHITE,BG,TL_DATUM);
   const char* la[]={"Dau phun","Ban nhiet","Lop"};
@@ -312,19 +312,22 @@ void setup(){
 
   splash("Dang ket noi WiFi...","","Lan dau: mo 'PTP-REPAIR-Setup'");
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);                 // WiFi nhanh, it tre
   wm.addParameter(&pEvent); wm.addParameter(&pPC);
-  wm.setAPCallback(apCb); wm.setConfigPortalTimeout(180);
+  wm.setAPCallback(apCb);
+  wm.setConfigPortalTimeout(180);
+  wm.setConnectTimeout(12);             // khong cho qua lau khi vao WiFi
+  wm.setWiFiAutoReconnect(true);
   wifiOK = wm.autoConnect("PTP-REPAIR-Setup");
   if(wifiOK){ pullParams();
-    configTime(7*3600,0,"pool.ntp.org","time.google.com");
-    uint32_t t0=millis(); while(!timeSynced() && millis()-t0<6000) delay(150); }
+    configTime(7*3600,0,"pool.ntp.org","time.google.com"); } // dong bo gio chay nen, KHONG chan khoi dong
   draw();
 }
 void loop(){
   uint32_t now=millis();
   if(now-lastSec>=1000){ lastSec=now; if(page==0) homeClock(); }
   // Chi doc may in khi dang xem trang May in -> cac trang khac muot 100%
-  if(wifiOK && page==2 && now-lastPoll>=11000){ lastPoll=now; pollPrinter(); }
+  if(wifiOK && page==2 && now-lastPoll>=15000){ lastPoll=now; pollPrinter(); }
   if(page==2 && pDirty && now-lastPrintDraw>=800){ lastPrintDraw=now; pDirty=false; pagePrint(); }
   uint16_t tx,ty;
   if(tft.getTouch(&tx,&ty)){ handleTouch(tx,ty);
