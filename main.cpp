@@ -193,7 +193,7 @@ const char* stateVi(const char*s){
 }
 void pagePrint(){
   tft.fillRect(0,0,320,196,BG);
-  bool on = pOnline && (millis()-pLast < 20000);
+  bool on = pOnline && (millis()-pLast < 35000);
   tft.fillCircle(13,17,4, on?GRN:MUTED);
   txt(1,24,8,"May in 3D",WHITE,BG,TL_DATUM);
   const char* la[]={"Dau phun","Ban nhiet","Lop"};
@@ -324,7 +324,7 @@ void loop(){
   uint32_t now=millis();
   if(now-lastSec>=1000){ lastSec=now; if(page==0) homeClock(); }
   // Chi doc may in khi dang xem trang May in -> cac trang khac muot 100%
-  if(wifiOK && page==2 && now-lastPoll>=5000){ lastPoll=now; pollPrinter(); }
+  if(wifiOK && page==2 && now-lastPoll>=11000){ lastPoll=now; pollPrinter(); }
   if(page==2 && pDirty && now-lastPrintDraw>=800){ lastPrintDraw=now; pDirty=false; pagePrint(); }
   uint16_t tx,ty;
   if(tft.getTouch(&tx,&ty)){ handleTouch(tx,ty);
