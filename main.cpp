@@ -344,10 +344,13 @@ void setup(){
     wm.addParameter(&pEvent); wm.addParameter(&pPC);
     wm.setAPCallback(apCb);
     wm.setConfigPortalTimeout(180);
+    wm.setBreakAfterConfig(true);   // bam Luu la thoat portal + vao giao dien NGAY
     wm.setConnectTimeout(12);
     wm.setWiFiAutoReconnect(true);
-    wifiOK = wm.autoConnect("PTP-REPAIR-Setup");
-    if(wifiOK) pullParams();
+    wm.autoConnect("PTP-REPAIR-Setup");
+    pullParams();                   // luu IP may tinh + su kien vua nhap
+    splash("Dang ket noi WiFi...","","");
+    wifiOK = waitConn(8000);        // thu vai giay, con lai de chay nen
   }
   if(wifiOK){ saveWifi();
     configTime(7*3600,0,"pool.ntp.org","time.google.com"); } // dong bo gio chay nen, KHONG chan khoi dong
@@ -356,6 +359,10 @@ void setup(){
 void loop(){
   uint32_t now=millis();
   if(now-lastSec>=1000){ lastSec=now; if(page==0) homeClock(); }
+  // Theo doi WiFi chay nen: khi ket noi len/rot thi tu cap nhat giao dien
+  static uint32_t lwc=0;
+  if(now-lwc>=2000){ lwc=now; bool c=(WiFi.status()==WL_CONNECTED);
+    if(c!=wifiOK){ wifiOK=c; if(c){ saveWifi(); configTime(7*3600,0,"pool.ntp.org","time.google.com"); } draw(); } }
   // Chi doc may in khi dang xem trang May in -> cac trang khac muot 100%
   if(wifiOK && page==2 && now-lastPoll>=15000){ lastPoll=now; pollPrinter(); }
   if(page==2 && pDirty && now-lastPrintDraw>=800){ lastPrintDraw=now; pDirty=false; pagePrint(); }
