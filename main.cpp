@@ -222,8 +222,11 @@ void pagePrint(){
     sprintf(val,"%d%%",pPct); txt(0,8,128,val,MUTED,BG,TL_DATUM);
     sprintf(val,"con %d phut",pRem); txt(0,312,128,val,MUTED,BG,TR_DATUM);
   }
-  rr(8,150,150,44,CARD,10); txt(0,83,172,"Tam dung",KEYTX,CARD,TC_DATUM);
-  rr(164,150,148,44,CARD,10); txt(0,238,172,"Dung",KEYTX,CARD,TC_DATUM);
+  bool paused = (strcmp(pState,"PAUSE")==0);
+  const char* plbl = paused ? "Tiep tuc" : "Tam dung";
+  uint16_t pcol = paused ? GRN : ORANGE;
+  rr(8,150,150,44,pcol,10);  txt(0,83,172,plbl,DARK,pcol,MC_DATUM);
+  rr(164,150,148,44,RED,10); txt(0,238,172,"Dung",WHITE,RED,MC_DATUM);
   tabBar();
 }
 void srow(int y,const char*k,const char*v,bool sw,bool on,uint16_t vc){
@@ -302,6 +305,46 @@ void reconfigWifi(){
   draw();
 }
 
+// Gui lenh dieu khien may in len Firebase (/cmd) -> PC -> may in
+void sendPrinterCmd(const char* c){
+  if(!wifiOK) return;
+  WiFiClientSecure cs; cs.setInsecure(); cs.setHandshakeTimeout(6);
+  HTTPClient h; h.setConnectTimeout(6000); h.setTimeout(7000);
+  String url=String(FB_BASE)+"/cmd.json";
+  if(h.begin(cs,url)){
+    h.addHeader("Content-Type","application/json");
+    String body=String("{\"c\":\"")+c+"\",\"n\":"+String(millis())+"}";
+    h.sendRequest("PUT",(uint8_t*)body.c_str(),body.length());
+    h.end();
+  }
+  // phan hoi ngay tren man (poll that se xac nhan lai sau)
+  if(strcmp(c,"pause")==0) strcpy(pState,"PAUSE");
+  else if(strcmp(c,"resume")==0) strcpy(pState,"RUNNING");
+  else if(strcmp(c,"stop")==0) strcpy(pState,"FINISH");
+  pLast=millis(); pOnline=true; lastPoll=0;
+  if(page==2) pagePrint();
+}
+void confirmStop(){
+  rr(30,58,260,112,CARD,12); tft.drawRoundRect(30,58,260,112,12,RED);
+  txt(1,160,76,"Dung ban in?",WHITE,CARD,MC_DATUM);
+  txt(0,160,100,"Khong the hoan tac",MUTED,CARD,MC_DATUM);
+  rr(48,126,96,34,CARD,8); tft.drawRoundRect(48,126,96,34,8,MUTED);
+  txt(0,96,143,"Khong",WHITE,CARD,MC_DATUM);
+  rr(176,126,96,34,RED,8); txt(0,224,143,"Dung",WHITE,RED,MC_DATUM);
+  uint32_t t0=millis(); uint16_t tx,ty;
+  while(millis()-t0<8000){
+    if(tft.getTouch(&tx,&ty)){ beep();
+      if(ty>=126 && ty<160){
+        if(tx>=176 && tx<272){ sendPrinterCmd("stop"); return; }
+        if(tx>=48 && tx<144){ break; }
+      }
+      while(tft.getTouch(&tx,&ty)) delay(10); delay(60);
+    }
+    delay(20);
+  }
+  pagePrint();
+}
+
 void handleTouch(int x,int y){
   beep();
   if(y>=199){ for(int i=0;i<4;i++){ int tx0=6+i*78; if(x>=tx0&&x<tx0+74){
@@ -309,6 +352,11 @@ void handleTouch(int x,int y){
   if(page==1){
     for(int i=0;i<6;i++){ int kx,ky,kw,kh; deckRect(i,kx,ky,kw,kh);
       if(x>=kx&&x<kx+kw&&y>=ky&&y<ky+kh){ keyFlash(i); openApp(APPID[i]); return; } }
+  } else if(page==2){
+    if(y>=150 && y<194){
+      if(x>=8 && x<158) sendPrinterCmd(strcmp(pState,"PAUSE")==0?"resume":"pause");  // Tam dung/Tiep tuc
+      else if(x>=164 && x<312) confirmStop();                                         // Dung
+    }
   } else if(page==3){
     if(y<66) reconfigWifi();                       // WiFi
     else if(y>=94&&y<124) reconfigWifi();          // PC IP (cung portal)
