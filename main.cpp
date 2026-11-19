@@ -27,6 +27,8 @@ static const uint16_t BG=C565(11,13,17), CARD=C565(20,24,33), KEYAPP=C565(23,31,
 
 #define BUZZER 32
 int page=0, curFont=-1; uint32_t lastSec=0;
+bool saverOn=false; int saverMin=2;   // man hinh cho (1-5 phut)
+bool scrAsleep=false; uint32_t lastAct=0;
 bool ntpOn=true, wifiOK=false;
 char eventTxt[48]="Chua dat su kien";
 char pcIP[20]="";
@@ -235,25 +237,37 @@ void srow(int y,const char*k,const char*v,bool sw,bool on,uint16_t vc){
   else txt(0,312,y,v,vc,BG,TR_DATUM);
   tft.drawFastHLine(8,y+25,304,BORDER);
 }
+void swDraw(int x,int y,bool on){ rr(x,y-1,34,18,on?GRN:CARD,9); tft.fillCircle(on?x+24:x+10,y+8,7,WHITE); }
 void pageSettings(){
   tft.fillRect(0,0,320,196,BG);
   tft.fillCircle(13,17,4, wifiOK?GRN:RED);
   txt(1,24,8,"Cai dat",WHITE,BG,TL_DATUM);
-  char rs[10], ps[22];
-  if(wifiOK){ snprintf(rs,sizeof(rs),"%d dBm",WiFi.RSSI()); }
-  else strcpy(rs,"--");
-  snprintf(ps,sizeof(ps),"%s", strlen(pcIP)?pcIP:"chua dat");
-  srow(44,"WiFi (cham de doi):",rs,false,false, wifiOK?GRN:ORANGE);
-  srow(74, wifiOK?WiFi.SSID().c_str():"Chua ket noi","",false,false,MUTED);
-  srow(104,"IP may tinh (PC):",ps,false,false, strlen(pcIP)?GRN:ORANGE);
-  srow(134,"Dong bo gio (NTP)","",true, timeSynced(), MUTED);
-  srow(164,"Khoi dong lai thiet bi","cham",false,false,ORANGE);
+  int y;
+  y=46; txt(0,10,y,"WiFi (cham doi)",WHITE,BG,TL_DATUM);
+  txt(0,312,y, wifiOK?WiFi.SSID().c_str():"Chua ket noi", wifiOK?GRN:ORANGE, BG, TR_DATUM);
+  tft.drawFastHLine(8,y+23,304,BORDER);
+  y=76; txt(0,10,y,"IP may tinh",WHITE,BG,TL_DATUM);
+  txt(0,312,y, strlen(pcIP)?pcIP:"cham de dat", strlen(pcIP)?GRN:ORANGE, BG, TR_DATUM);
+  tft.drawFastHLine(8,y+23,304,BORDER);
+  y=106; txt(0,10,y,"Man hinh cho",WHITE,BG,TL_DATUM);
+  if(saverOn){ char d[12]; sprintf(d,"%d phut",saverMin); txt(0,250,y,d,ORANGE,BG,TR_DATUM); }
+  else txt(0,250,y,"Tat",MUTED,BG,TR_DATUM);
+  swDraw(278,y,saverOn);
+  tft.drawFastHLine(8,y+23,304,BORDER);
+  y=136; txt(0,10,y,"Dong bo gio",WHITE,BG,TL_DATUM);
+  swDraw(278,y,timeSynced());
+  tft.drawFastHLine(8,y+23,304,BORDER);
+  y=166; txt(0,10,y,"Khoi dong lai",WHITE,BG,TL_DATUM);
+  txt(0,312,y,"cham",ORANGE,BG,TR_DATUM);
   tabBar();
 }
 void draw(){ if(page==0)pageHome(); else if(page==1)pageDeck();
   else if(page==2)pagePrint(); else pageSettings(); }
 
 void saveCfg(){ prefs.begin("ptp",false); prefs.putString("event",eventTxt); prefs.putString("pcip",pcIP); prefs.end(); }
+void saveSettings(){ prefs.begin("ptp",false); prefs.putBool("svon",saverOn); prefs.putInt("svmin",saverMin); prefs.end(); }
+void scrSleep(){ scrAsleep=true; tft.writecommand(0x28); }   // tat hien thi (khong can doi day den nen)
+void scrWake(){  scrAsleep=false; tft.writecommand(0x29); draw(); }
 
 void splash(const char*l1,const char*l2,const char*l3){
   tft.fillScreen(BG); drawLogo(128,24);
@@ -358,10 +372,14 @@ void handleTouch(int x,int y){
       else if(x>=164 && x<312) confirmStop();                                         // Dung
     }
   } else if(page==3){
-    if(y<66) reconfigWifi();                       // WiFi
-    else if(y>=94&&y<124) reconfigWifi();          // PC IP (cung portal)
-    else if(y>=124&&y<154){ if(wifiOK) configTime(7*3600,0,"pool.ntp.org","time.google.com"); draw(); }
-    else if(y>=154){ splash("Dang khoi dong lai...","",""); delay(600); ESP.restart(); }
+    if(y<62) reconfigWifi();                        // WiFi
+    else if(y<92) reconfigWifi();                   // PC IP (cung portal)
+    else if(y<122){                                 // Man hinh cho
+      if(x>=270){ saverOn=!saverOn; lastAct=millis(); saveSettings(); draw(); }  // bat/tat
+      else if(x>=160&&x<265){ saverMin = saverMin>=5?1:saverMin+1; saveSettings(); draw(); } // 1->5 phut
+    }
+    else if(y<152){ if(wifiOK) configTime(7*3600,0,"pool.ntp.org","time.google.com"); draw(); }  // NTP
+    else { splash("Dang khoi dong lai...","",""); delay(600); ESP.restart(); }
   }
 }
 
@@ -382,7 +400,10 @@ void setup(){
   pinMode(BUZZER,OUTPUT); digitalWrite(BUZZER,HIGH);
   tft.init(); tft.setRotation(3); tft.setSwapBytes(true); tft.fillScreen(BG);
   loadCalibration();
-  prefs.begin("ptp",false); String ev=prefs.getString("event",""); String ip=prefs.getString("pcip",""); prefs.end();
+  prefs.begin("ptp",false); String ev=prefs.getString("event",""); String ip=prefs.getString("pcip","");
+  saverOn=prefs.getBool("svon",false); saverMin=prefs.getInt("svmin",2);
+  if(saverMin<1)saverMin=1; if(saverMin>5)saverMin=5; prefs.end();
+  lastAct=millis();
   if(ev.length()>0){ strncpy(eventTxt,ev.c_str(),47); eventTxt[47]=0; }
   if(ip.length()>0){ strncpy(pcIP,ip.c_str(),19); pcIP[19]=0; }
 
@@ -416,8 +437,13 @@ void loop(){
     if(c!=wifiOK){ wifiOK=c; if(c){ saveWifi(); configTime(7*3600,0,"pool.ntp.org","time.google.com"); } draw(); } }
   // Chi doc may in khi dang xem trang May in -> cac trang khac muot 100%
   if(wifiOK && page==2 && now-lastPoll>=10000){ lastPoll=now; pollPrinter(); }
-  if(page==2 && pDirty && now-lastPrintDraw>=800){ lastPrintDraw=now; pDirty=false; pagePrint(); }
+  if(page==2 && !scrAsleep && pDirty && now-lastPrintDraw>=800){ lastPrintDraw=now; pDirty=false; pagePrint(); }
+  // Man hinh cho: tat hien thi khi khong cham du lau
+  if(saverOn && !scrAsleep && now-lastAct > (uint32_t)saverMin*60000UL) scrSleep();
   uint16_t tx,ty;
-  if(tft.getTouch(&tx,&ty)){ handleTouch(tx,ty);
+  if(tft.getTouch(&tx,&ty)){
+    lastAct=now;
+    if(scrAsleep) scrWake();          // cham de danh thuc, khong bam nut
+    else handleTouch(tx,ty);
     while(tft.getTouch(&tx,&ty)) delay(10); delay(60); }
 }
