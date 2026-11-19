@@ -14,6 +14,7 @@
 #include "F_BIG.h"   // Poppins Medium 46px (clock)
 #include "LOGO.h"    // PTP REPAIR 64x64
 #include "DECKI.h"   // 6 icon app 36x36
+#include "BANNER.h"  // PTP REPAIR 320x240 (man hinh cho)
 
 TFT_eSPI tft = TFT_eSPI();
 Preferences prefs;
@@ -266,8 +267,19 @@ void draw(){ if(page==0)pageHome(); else if(page==1)pageDeck();
 
 void saveCfg(){ prefs.begin("ptp",false); prefs.putString("event",eventTxt); prefs.putString("pcip",pcIP); prefs.end(); }
 void saveSettings(){ prefs.begin("ptp",false); prefs.putBool("svon",saverOn); prefs.putInt("svmin",saverMin); prefs.end(); }
-void scrSleep(){ scrAsleep=true; tft.writecommand(0x28); }   // tat hien thi (khong can doi day den nen)
-void scrWake(){  scrAsleep=false; tft.writecommand(0x29); draw(); }
+// --- Man hinh cho: hien banner PTP REPAIR (logo + so dien thoai), can giua ---
+void runSaver(){
+  tft.fillScreen(BG);
+  tft.setSwapBytes(true);
+  tft.pushImage((320-BANNER_W)/2,(240-BANNER_H)/2,BANNER_W,BANNER_H,BANNER); // can giua, vien den
+  uint16_t tx,ty;
+  while(!tft.getTouch(&tx,&ty)) delay(30);        // giu den khi cham
+}
+void scrSleep(){
+  scrAsleep=true; runSaver();                     // hien banner den khi cham
+  uint16_t tx,ty; while(tft.getTouch(&tx,&ty)) delay(10);   // doi nha tay
+  delay(80); scrAsleep=false; lastAct=millis(); draw();
+}
 
 void splash(const char*l1,const char*l2,const char*l3){
   tft.fillScreen(BG); drawLogo(128,24);
@@ -438,12 +450,9 @@ void loop(){
   // Chi doc may in khi dang xem trang May in -> cac trang khac muot 100%
   if(wifiOK && page==2 && now-lastPoll>=10000){ lastPoll=now; pollPrinter(); }
   if(page==2 && !scrAsleep && pDirty && now-lastPrintDraw>=800){ lastPrintDraw=now; pDirty=false; pagePrint(); }
-  // Man hinh cho: tat hien thi khi khong cham du lau
+  // Man hinh cho: hien 2 con mat + logo khi khong cham du lau (cham de thoat)
   if(saverOn && !scrAsleep && now-lastAct > (uint32_t)saverMin*60000UL) scrSleep();
   uint16_t tx,ty;
-  if(tft.getTouch(&tx,&ty)){
-    lastAct=now;
-    if(scrAsleep) scrWake();          // cham de danh thuc, khong bam nut
-    else handleTouch(tx,ty);
+  if(tft.getTouch(&tx,&ty)){ lastAct=now; handleTouch(tx,ty);
     while(tft.getTouch(&tx,&ty)) delay(10); delay(60); }
 }
